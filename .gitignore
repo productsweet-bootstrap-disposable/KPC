@@ -1,0 +1,17 @@
+# Build artefacts
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Local environment
+.env
+.env.local
+.env.*.local
+.aws-sso-cache/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
