@@ -64,7 +64,7 @@ For `astro`, install the snippet in the framework's canonical layout slot:
 ## Current State And Evidence
 
 - No analytics installed today.
-- Live URL: `https://pending-first-deploy.example/`.
+- Live URL: `https://main.d3jvz8g9mohfwa.amplifyapp.com`.
 
 ## Proposed Design / Approach
 
@@ -85,7 +85,7 @@ the analytics script.
 2. Sign up + obtain the site identifier.
 3. Add the snippet to the framework's root layout.
 4. Push to `main`.
-5. Visit `https://pending-first-deploy.example/` from a browser; confirm a hit lands in the provider's dashboard.
+5. Visit `https://main.d3jvz8g9mohfwa.amplifyapp.com` from a browser; confirm a hit lands in the provider's dashboard.
 
 ## Verification Plan
 
@@ -126,5 +126,5 @@ Fill this in when the task is done.
 
 ## Definition of Done Gate
 
-1. Provider snippet committed and shipped to `https://pending-first-deploy.example/`.
+1. Provider snippet committed and shipped to `https://main.d3jvz8g9mohfwa.amplifyapp.com`.
 2. Provider dashboard records hits.

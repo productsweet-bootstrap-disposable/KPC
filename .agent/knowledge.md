@@ -43,7 +43,7 @@ last_updated: "2026-11-03"
 - **Language:** TypeScript
 - **Hosting:** AWS Amplify Hosting in account `874373490779` (region `ap-southeast-2`).
 - **Repository:** https://github.com/productsweet-bootstrap-disposable/KPC
-- **Custom domain:** pending-bind-custom-domain
+- **Custom domain:** https://main.d3jvz8g9mohfwa.amplifyapp.com
 - **Owner:** productsweet-bootstrap-disposable
 - **Accessibility floor:** WCAG 2.2 AA — every shipped surface must pass the contrast,
   focus-visibility, touch-target, and label rules of the Product Sweet design system
@@ -60,7 +60,7 @@ last_updated: "2026-11-03"
   chosen framework. Auto-build on `main` is **disabled** — the GitHub Actions deploy workflow is the
   only release path. Content-only changes (under `.kanban/` and `.agent/`) skip the rebuild via the
   env-cache pattern.
-- **Custom Domain:** pending-bind-custom-domain. Route53 hosted zone reused per the AI6P pattern; if
+- **Custom Domain:** https://main.d3jvz8g9mohfwa.amplifyapp.com. Route53 hosted zone reused per the AI6P pattern; if
   no zone was available the bootstrap took the `*.amplifyapp.com` fallback and seeded a "bind a
   custom domain later" task.
 

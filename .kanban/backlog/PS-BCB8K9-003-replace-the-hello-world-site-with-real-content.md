@@ -21,7 +21,7 @@ attachments: 0
 
 ## Summary
 
-The bootstrap shipped a `astro` hello-world site to `https://pending-first-deploy.example/`. Replace it with the
+The bootstrap shipped a `astro` hello-world site to `https://main.d3jvz8g9mohfwa.amplifyapp.com`. Replace it with the
 project's real homepage — the headline, the supporting copy, and any first-pass imagery — so the
 site stops looking like a template.
 
@@ -52,7 +52,7 @@ content.
 
 ## Current State And Evidence
 
-- The live URL is `https://pending-first-deploy.example/`.
+- The live URL is `https://main.d3jvz8g9mohfwa.amplifyapp.com`.
 - The framework is `astro`. Refer to the framework overlay in `.agent/knowledge.md >
   Architecture > Framework` for which files are where.
 
@@ -82,7 +82,7 @@ Content authoring. No ambient inputs.
 
 - Local dev server renders the new homepage.
 - The framework's lint + test scripts pass.
-- The deploy workflow ships the change to `https://pending-first-deploy.example/`.
+- The deploy workflow ships the change to `https://main.d3jvz8g9mohfwa.amplifyapp.com`.
 - Manual sweep: heading hierarchy, alt text, contrast.
 
 ## Questions
@@ -114,5 +114,5 @@ Fill this in when the task is done.
 
 ## Definition of Done Gate
 
-1. The homepage at `https://pending-first-deploy.example/` shows real content.
+1. The homepage at `https://main.d3jvz8g9mohfwa.amplifyapp.com` shows real content.
 2. Framework lint + test scripts pass on the final commit.

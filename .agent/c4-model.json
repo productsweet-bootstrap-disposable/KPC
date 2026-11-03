@@ -66,7 +66,7 @@
       "technology": "Astro static output — HTML emitted at build time, with optional component islands hydrated client-side",
       "responsibilities": [
         "Render the project's content as static HTML at build time",
-        "Serve from AWS Amplify Hosting at https://pending-first-deploy.example/",
+        "Serve from AWS Amplify Hosting at https://main.d3jvz8g9mohfwa.amplifyapp.com",
         "Hydrate selectively — Astro components ship zero JS by default; islands opt in via `client:*` directives"
       ],
       "relationships": [

@@ -26,7 +26,7 @@ attachments: 0
 
 The bootstrap could not bind a custom domain at provisioning time — no Route53 hosted zone was
 available — and took the `*.amplifyapp.com` fallback per AI6P-249 Q5. The site is currently served
-at `https://pending-first-deploy.example/` (the Amplify default URL). When a hosted zone is available, bind the chosen
+at `https://main.d3jvz8g9mohfwa.amplifyapp.com` (the Amplify default URL). When a hosted zone is available, bind the chosen
 custom domain.
 
 ## Problem Or Opportunity
@@ -47,7 +47,7 @@ and inbound links all key off the canonical hostname; the longer the site lives 
 - Use the AWS Amplify console (or the Amplify domain-association API) to bind the chosen
   subdomain — or apex — to the Amplify app.
 - Wait for ACM certificate issuance + DNS verification.
-- Confirm the new URL serves the same content as `https://pending-first-deploy.example/` over HTTPS.
+- Confirm the new URL serves the same content as `https://main.d3jvz8g9mohfwa.amplifyapp.com` over HTTPS.
 - Update `.agent/current-state.md > Bootstrap Decisions > Custom Domain` with the new value and
   flip `c4-model.json` to add the `aws-route53` external system if it was omitted at bootstrap.
 
@@ -60,7 +60,7 @@ and inbound links all key off the canonical hostname; the longer the site lives 
 ## Current State And Evidence
 
 - Bootstrap took the `*.amplifyapp.com` fallback per AI6P-249 Q5.
-- Live URL today: `https://pending-first-deploy.example/`.
+- Live URL today: `https://main.d3jvz8g9mohfwa.amplifyapp.com`.
 - Amplify App ID: see `.agent/current-state.md` (filled in once the bootstrap reaches `complete`)
   or repo Settings → Variables → Actions → `PRODUCTSWEET_AMPLIFY_APP_ID`.
 - AWS Account: `874373490779`, region `ap-southeast-2`.
@@ -87,13 +87,13 @@ completes within minutes.
 3. Open Amplify console → app → Domain management → Add domain.
 4. Pick the hosted zone; pick the subdomain mapping.
 5. Wait for status `AVAILABLE`.
-6. HTTPS-GET the new URL; confirm 200 + same content as `https://pending-first-deploy.example/`.
+6. HTTPS-GET the new URL; confirm 200 + same content as `https://main.d3jvz8g9mohfwa.amplifyapp.com`.
 7. Update `.agent/current-state.md` and `.agent/c4-model.json`.
 
 ## Verification Plan
 
 - Amplify reports `AVAILABLE` for the new domain mapping.
-- `curl -sSf https://<new-domain>/` returns 200 and serves the same content as `https://pending-first-deploy.example/`.
+- `curl -sSf https://<new-domain>/` returns 200 and serves the same content as `https://main.d3jvz8g9mohfwa.amplifyapp.com`.
 - ACM certificate is valid (no browser warning).
 - `dig <new-domain>` resolves to a CloudFront / Amplify edge.
 

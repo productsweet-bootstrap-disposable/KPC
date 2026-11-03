@@ -22,7 +22,7 @@ attachments: 0
 
 ## Summary
 
-Confirm that an end-to-end push to `main` actually deploys to `https://pending-first-deploy.example/` and that the live URL
+Confirm that an end-to-end push to `main` actually deploys to `https://main.d3jvz8g9mohfwa.amplifyapp.com` and that the live URL
 serves the framework's hello-world page.
 
 ## Problem Or Opportunity
@@ -43,7 +43,7 @@ first real change. Verify it now while the live URL and Amplify console are fres
 - Make a trivial real commit to `main` (e.g. a `docs:` README tweak).
 - Watch the GitHub Actions run go green.
 - Confirm Amplify reports a successful RELEASE job.
-- HTTPS-GET `https://pending-first-deploy.example/` and confirm the response code is 200 and the body changed.
+- HTTPS-GET `https://main.d3jvz8g9mohfwa.amplifyapp.com` and confirm the response code is 200 and the body changed.
 
 ## Out Of Scope
 
@@ -52,7 +52,7 @@ first real change. Verify it now while the live URL and Amplify console are fres
 
 ## Current State And Evidence
 
-- Live URL: `https://pending-first-deploy.example/`
+- Live URL: `https://main.d3jvz8g9mohfwa.amplifyapp.com`
 - Amplify App ID: see `.agent/current-state.md` (filled in once the bootstrap reaches `complete`)
   or repo Settings → Variables → Actions → `PRODUCTSWEET_AMPLIFY_APP_ID`.
 - Repo: `https://github.com/productsweet-bootstrap-disposable/KPC`
@@ -79,7 +79,7 @@ investigate before retrying.
 3. Watch the deploy workflow at GitHub → Actions.
 4. Watch Amplify → your project's app → `main` for a new RELEASE job (the app id is in
    `.agent/current-state.md` or the `PRODUCTSWEET_AMPLIFY_APP_ID` repo variable).
-5. HTTPS-GET `https://pending-first-deploy.example/` and confirm the README change is reflected in the served HTML (or
+5. HTTPS-GET `https://main.d3jvz8g9mohfwa.amplifyapp.com` and confirm the README change is reflected in the served HTML (or
    nearby — depending on framework, the README might not render to the live page directly; in that
    case make a more visible content change).
 
@@ -87,7 +87,7 @@ investigate before retrying.
 
 - GitHub Actions run is green.
 - Amplify RELEASE job reports `SUCCEED`.
-- `curl -sSf https://pending-first-deploy.example/` returns 200.
+- `curl -sSf https://main.d3jvz8g9mohfwa.amplifyapp.com` returns 200.
 - The visible content reflects the new commit.
 
 ## Questions

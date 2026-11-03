@@ -2,7 +2,7 @@
 
 A Astro 5 site, bootstrapped by Product Sweet (AI6P-249).
 
-- **Live:** https://pending-first-deploy.example/
+- **Live:** https://main.d3jvz8g9mohfwa.amplifyapp.com
 - **Framework:** Astro 5
 - **Hosting:** AWS Amplify (account `874373490779`)
 - **Managed by:** Product Sweet bootstrap (AI6P-249)
