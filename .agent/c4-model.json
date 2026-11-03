@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "system": {
+    "id": "productsweet-bootstrap-disposable-kpc",
+    "name": "KPC",
+    "summary": "Static website hosted on AWS Amplify and built from a GitHub repository on every push to `main` via a GitHub Actions deploy workflow. Bootstrapped from the Product Sweet website-bootstrap template; refine this summary once the project takes shape.",
+    "technology": "Astro 5, AWS Amplify Hosting, GitHub Actions",
+    "relationships": [
+      {
+        "targetId": "github",
+        "label": "stores source; PR + push events trigger the deploy workflow",
+        "direction": "bidirectional"
+      },
+      {
+        "targetId": "github-actions",
+        "label": "runs lint + tests + build on PR; runs the deploy workflow on `main` push and triggers an Amplify RELEASE job",
+        "direction": "incoming"
+      },
+      {
+        "targetId": "aws-amplify-hosting",
+        "label": "serves the built site; auto-build on `main` is disabled — releases are triggered exclusively by the deploy workflow",
+        "direction": "outgoing"
+      },
+      {
+        "targetId": "viewer",
+        "label": "serves rendered HTML, CSS, JS, and assets to readers' browsers",
+        "direction": "outgoing"
+      }
+    ]
+  },
+  "externalSystems": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "summary": "Source repository hosting at https://github.com/productsweet-bootstrap-disposable/KPC. Stores the framework source, the `.kanban/` task tree, the `.agent/` knowledge folder, and the GitHub Actions workflows committed by the bootstrap.",
+      "kind": "external",
+      "group": "Source & CI"
+    },
+    {
+      "id": "github-actions",
+      "name": "GitHub Actions",
+      "summary": "CI/CD runner federated into AWS via OIDC (`token.actions.githubusercontent.com`). Runs the always-on `pr-gate.yml` — the single required status check — on every PR (it classifies the diff into a fast content lane or a full build lane in-job, so the required check reports on every PR including content-only ones), and `deploy-low.yml` on every `main` push (lint + tests + build, then triggers an Amplify RELEASE job to the low environment and waits on the result). Higher environments are promoted by `promote-<env>.yml` workflows — `workflow_dispatch`-only, no push trigger — dispatched by the Product Sweet webapp with the reviewed commit pinned as a `sha` input. Trust pin scopes to this repository's owner.",
+      "kind": "external",
+      "group": "Source & CI"
+    },
+    {
+      "id": "aws-amplify-hosting",
+      "name": "AWS Amplify Hosting",
+      "summary": "Hosts the built site on the Amplify CDN. Auto-build on `main` is disabled; the bootstrap-installed deploy workflow is the only release path. Content-only changes (paths under `.kanban/` and `.agent/`) skip the rebuild via the env-cache rule.",
+      "kind": "external",
+      "group": "Hosting"
+    },
+    {
+      "id": "viewer",
+      "name": "Site Viewer",
+      "summary": "End user reading the static site in a browser. The viewer's only relationship with this system is to fetch HTML, CSS, JS, and assets from Amplify Hosting.",
+      "kind": "person",
+      "group": "People"
+    }
+  ],
+  "containers": [
+    {
+      "id": "static-site",
+      "name": "Static Site",
+      "summary": "The built static site itself — HTML, CSS, JS, and assets produced by the framework build and deployed to AWS Amplify Hosting on every `main` push. Per-framework overlays append framework-specific notes to the `technology` and `responsibilities` fields.",
+      "technology": "Astro static output — HTML emitted at build time, with optional component islands hydrated client-side",
+      "responsibilities": [
+        "Render the project's content as static HTML at build time",
+        "Serve from AWS Amplify Hosting at https://pending-first-deploy.example/",
+        "Hydrate selectively — Astro components ship zero JS by default; islands opt in via `client:*` directives"
+      ],
+      "relationships": [
+        {
+          "targetId": "viewer",
+          "label": "served to the viewer's browser",
+          "direction": "outgoing"
+        },
+        {
+          "targetId": "aws-amplify-hosting",
+          "label": "deployed to and served from",
+          "direction": "incoming"
+        }
+      ],
+      "group": "Frontend"
+    },
+    {
+      "id": "build-pipeline",
+      "name": "Build Pipeline",
+      "summary": "GitHub Actions workflow that runs lint + tests + framework build on every push to `main`, then triggers the Amplify RELEASE job and waits on its outcome. Same gates run on PRs without the release step.",
+      "technology": "GitHub Actions, Astro build (`astro build` → `dist/`), AWS CLI (Amplify StartJob)",
+      "responsibilities": [
+        "Validate every PR (lint + tests + build)",
+        "Deploy `main` to AWS Amplify on push (lint + tests + build, then Amplify RELEASE)",
+        "Skip the rebuild for content-only changes under `.kanban/` and `.agent/`"
+      ],
+      "relationships": [
+        {
+          "targetId": "github",
+          "label": "checks out source from",
+          "direction": "incoming"
+        },
+        {
+          "targetId": "aws-amplify-hosting",
+          "label": "triggers and awaits Amplify RELEASE jobs",
+          "direction": "outgoing"
+        }
+      ],
+      "group": "Build & Deploy"
+    }
+  ],
+  "components": []
+}
