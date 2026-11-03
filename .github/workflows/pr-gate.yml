@@ -1,0 +1,213 @@
+# pr-gate — the SINGLE required status check for `main`.
+#
+# This workflow has NO `paths:` trigger filter on purpose: it must run on
+# EVERY PR to `main` so the required `pr-gate` check always reports a
+# conclusion. GitHub branch protection treats a required check whose workflow
+# never triggers as "Expected — waiting for status" and blocks the merge
+# indefinitely, so a path-FILTERED workflow can never be a safe required check.
+# Path-aware speed lives INSIDE the job (a fast content lane vs the full
+# build lane), classified from the PR diff — never in a `paths:` trigger.
+#
+# This mirrors the kanban-app's own AI6P-661 pr-gate invariant: never make a
+# path-filtered or path-conditional check a required status check. Only an
+# always-on gate may be required. The pre-this-task tenant bootstrap set the
+# path-filtered `validate-pr` as the required check, so any PR touching only
+# `.kanban/**`, `.agent/**`, or root `*.md` (the product's core agent-driven
+# content loop) never triggered it and could never merge — a latent
+# merge-deadlock on every tenant.
+#
+# Templated by the AI6P-249 bootstrap; substituted placeholders:
+#   INSTALL_COMMAND  e.g. `npm ci --no-audit --no-fund`
+#   BUILD_COMMAND    e.g. `npm run build`
+name: pr-gate
+
+# AI6P-2322 — it ALSO runs on pushes to `main`. Product Sweet's task-completion
+# gate observes CI for the EXACT merged sha recorded on the card, and a squash
+# merge creates a brand-new commit that a `pull_request`-only workflow never
+# reports against. Without this trigger the required context is simply absent on
+# every merge commit, the gate reads `ci-pending` forever, and a delivered card
+# can only be closed by an explicit human waiver — the audited exception becoming
+# the only path. The PR run still gates the merge; this run is what makes the
+# shipping commit provable afterwards.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # `github.sha` on a push (there is no pull_request payload). Without the
+  # fallback every main push shares one empty-suffixed group and, with
+  # cancel-in-progress, a second merge CANCELS the first merge commit's run —
+  # leaving that commit with no conclusion, which is the very wedge above.
+  group: pr-gate-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # The job id is the bare check-run name GitHub matches the required status
+  # check against (no `name:` override). It MUST equal the engine's
+  # `BOOTSTRAP_REQUIRED_STATUS_CHECK` constant — a derivation test pins this.
+  pr-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+
+      # Content guards run on EVERY PR (both lanes) — they are pure bash with
+      # no dependencies and protect the `.kanban` board regardless of which
+      # lane the diff classifies into. The duplicate-task-ID guard (AI6P-769)
+      # MUST stay on the required gate: `.kanban` markdown authored directly in
+      # a PR never calls the server-side atomic ID allocator, and the sync
+      # reconciler silently collapses duplicate IDs (last-write-wins), hiding a
+      # real task. Keeping it here keeps the guard blocking.
+      - name: Verify no front-matter is malformed
+        run: |
+          set -euo pipefail
+          fail=0
+          shopt -s globstar nullglob
+          for f in .agent/**/*.md .kanban/**/*.md; do
+            head -n 1 "$f" 2>/dev/null | grep -qx '---' || continue
+            awk 'NR==1 && /^---$/ {open=1; next} open && /^---$/ {found=1; exit} END {exit found?0:1}' "$f" || {
+              echo "Malformed frontmatter: $f" >&2
+              fail=1
+            }
+          done
+          exit "$fail"
+
+      - name: Verify no duplicate task IDs
+        # Fail if the same exact frontmatter `id:` appears in more than one
+        # `.kanban` lane file. Exact-string match: `ACME-027` and `ACME-027-S4a`
+        # are distinct IDs and are NOT flagged. Quote chars are stripped via
+        # octal classes (\042 = ", \047 = ') so the awk program needs no literal
+        # quotes. Only the five lane folders are scanned; the `.data/` sidecar is
+        # never a task file.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ids="$(mktemp)"
+          for f in .kanban/intake/*.md .kanban/backlog/*.md .kanban/todo/*.md .kanban/doing/*.md .kanban/done/*.md; do
+            id="$(awk '
+              NR==1 && $0 != "---" { exit }
+              NR==1 { next }
+              /^---$/ { exit }
+              /^id:[ \t]/ {
+                sub(/^id:[ \t]*/, "")
+                gsub(/[\042\047]/, "")
+                sub(/[ \t]+$/, "")
+                print
+                exit
+              }' "$f")"
+            [ -n "$id" ] && printf '%s\t%s\n' "$id" "$f" >> "$ids"
+          done
+          dups="$(cut -f1 "$ids" | sort | uniq -d)"
+          if [ -n "$dups" ]; then
+            echo "Duplicate task IDs found (the same id: appears in more than one .kanban file):" >&2
+            while IFS= read -r d; do
+              echo "  $d:" >&2
+              awk -F'\t' -v d="$d" '$1 == d { print "    - " $2 }' "$ids" >&2
+            done <<< "$dups"
+            exit 1
+          fi
+          echo "No duplicate task IDs."
+
+      - name: Classify changed paths
+        id: classify
+        env:
+          # AI6P-2322 — on a push there is no pull_request payload, so fall back to
+          # the push range (`before`..`sha`), which is exactly the commits that just
+          # landed. Without the fallback both are empty, the fail-safe below fires,
+          # and EVERY main push runs the full build lane — turning a content-only
+          # merge into a full CI run for no coverage gain.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          # Ensure both PR SHAs are present locally for `git diff`.
+          for SHA in "$BASE" "$HEAD"; do
+            if ! git cat-file -e "$SHA" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$SHA" 2>/dev/null || true
+            fi
+          done
+
+          # Fail SAFE: if either SHA is unresolved, run the FULL lane so a
+          # transient fetch failure never silently downgrades coverage.
+          if ! git cat-file -e "$BASE" 2>/dev/null || ! git cat-file -e "$HEAD" 2>/dev/null; then
+            echo "Could not resolve BASE=$BASE or HEAD=$HEAD — defaulting content_only=false (full lane)"
+            echo "content_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$BASE" "$HEAD")"
+          echo "Changed files:"
+          printf '%s\n' "$changed"
+
+          # content_only is true ONLY if the PR has at least one changed file
+          # and EVERY changed path is documentation: under `.agent/` or
+          # `.kanban/`, or a top-level `*.md`. Anything else (framework source,
+          # config, `.github/**`) flips to the full build lane. Strip content
+          # paths, then root markdown; whatever remains is non-content.
+          non_content="$(printf '%s\n' "$changed" \
+            | grep -vE '^(\.agent/|\.kanban/)' \
+            | grep -vE '^[^/]+\.md$' || true)"
+          if [ -z "$changed" ] || [ -n "$non_content" ]; then
+            content_only=false
+          else
+            content_only=true
+          fi
+
+          echo "content_only=$content_only" >> "$GITHUB_OUTPUT"
+          {
+            echo "## pr-gate classification"
+            echo ""
+            echo "- lane: \`$([ "$content_only" = "true" ] && echo content || echo full)\`"
+            echo "- content_only: \`$content_only\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          # Node 24 — matches the Product Sweet build agent so the
+          # package-lock.json it generates is faithful to what `npm ci` validates.
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Content lane (lint + typecheck + test)
+        if: steps.classify.outputs.content_only == 'true'
+        # Docs / kanban content can't change the framework build output, so the
+        # content lane skips the (expensive) static-site build.
+        #
+        # AI6P-2113: lint and test are rendered from the framework's declared
+        # commands, NOT `--if-present`. `--if-present` reports success for a step
+        # that never ran, so the required check claimed coverage it did not have —
+        # the same class as AI6P-661, a gate that passes for the wrong reason.
+        # Where a framework genuinely seeds no linter or test runner the template
+        # says so out loud instead of quietly skipping.
+        run: |
+          echo "no linter seeded for this framework — skipping"
+          npm run typecheck
+          npm test
+
+      - name: Full lane (lint + typecheck + test + build)
+        if: steps.classify.outputs.content_only == 'false'
+        # AI6P-2112: the CI build, NOT the deploy build. This job declares
+        # `permissions: contents: read` with no `id-token: write` and no
+        # `configure-aws-credentials` step, so it can never hold AWS credentials.
+        # The deploy build starts with `gen-aws-config.mjs`, which reads the
+        # runtime-config contract from SSM and fails closed — running it here
+        # made every full-lane PR fail with `NoCredentials` regardless of its
+        # content, on the one always-on required status check. Config resolution
+        # is deploy-time; a PR gate answers "does the code compile and bundle".
+        run: |
+          echo "no linter seeded for this framework — skipping"
+          npm run typecheck
+          npm test
+          npm run build

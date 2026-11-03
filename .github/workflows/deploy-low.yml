@@ -1,0 +1,224 @@
+# Low-environment deployment (MANUAL DEPLOY variant) — AI6P-1280 (AI6P-1277 S2).
+#
+# This is the build-reuse hosting variant of `deploy-low.yml`: the GitHub
+# Actions runner builds the site ONCE and deploys the built artifact to Amplify
+# via a MANUAL deployment (`aws amplify create-deployment` → presigned upload →
+# `aws amplify start-deployment` → poll `get-job`). There is NO Amplify RELEASE
+# job and therefore NO Amplify BUILD step — Amplify hosts the uploaded artifact
+# as-is. This removes the runner+Amplify double-build and (per the AI6P-1273
+# probe) dissolves the cold-account "Unable to assume specified IAM Role" failure
+# that lives in the Amplify BUILD step.
+#
+# The Amplify app this targets is a NO-REPO manual-deploy app (no connected
+# repository, no build service role); the SPA rewrite for react-vite survives
+# because it is an app-level `customRule`, not a build-spec artifact.
+#
+# Rendered only when `manualDeployHosting` is ON; the RELEASE variant
+# `deploy-low.yml.tmpl` is the flag-OFF default. Same webapp-owned delivery
+# model (AI6P-826): push to main auto-deploys the LOW env; promotion to higher
+# envs is via the `promote-<env>.yml` workflows ("the gate is the trigger").
+#
+# Lessons preserved from the RELEASE variant:
+#   - `permissions: id-token: write` enables OIDC token minting (canonical-checklist §B4).
+#   - Actions are SHA-pinned per AI6P-103/-104 supply-chain hardening.
+#   - `PRODUCTSWEET_DEPLOY_ROLE_ARN` (AI6P-274) + `PRODUCTSWEET_AMPLIFY_APP_ID`
+#     (AI6P-414) are the engine-provisioned GH Actions variables; region is baked
+#     in at materialise time via the AWS_REGION placeholder.
+#
+# Templated by the AI6P-249 bootstrap; substituted placeholders:
+#   MAIN_PATH_FILTERS  YAML-list of framework-specific deployment paths
+#   INSTALL_COMMAND    e.g. `npm ci --no-audit --no-fund`
+#   BUILD_COMMAND      e.g. `npm run build`
+#   DIST_DIR           the framework build-artefact directory, e.g. `dist`
+#   AWS_REGION         baked-in region, e.g. `ap-southeast-2`
+name: deploy-low
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "astro.config.mjs"
+      - "vitest.config.ts"
+      - "tsconfig.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/**"
+      - "monitoring/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-low
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          # Node 24 — matches the Product Sweet build agent so the
+          # package-lock.json it generates is faithful to what `npm ci`
+          # validates.
+          node-version: 24
+          cache: npm
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+        with:
+          role-to-assume: ${{ vars.PRODUCTSWEET_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-2
+
+      # AI6P-1566: apply the static-frontend health-signal alarm stack (the
+      # Amplify build-failure alarm). Best-effort (continue-on-error) — this
+      # is an additive health baseline, never a deploy gate, so a missing IAM
+      # grant or transient CFN error must not block the site deploy. The guard
+      # skips projects (e.g. webapp) whose tree carries no monitoring template.
+      #
+      # AI6P-2211: this and the two steps below were added to the RELEASE variant
+      # only, so every tenant on THIS variant — which is the bootstrap default
+      # since AI6P-1282 — deployed with no monitoring stack and no build-failure
+      # metric. Nothing but a step-for-step diff of the two templates could have
+      # shown that: the RELEASE steps are `continue-on-error`, so a tenant whose
+      # workflow lacks them entirely looks exactly like one whose steps skipped.
+      #
+      # AI6P-2239: the step CATCHES its own failure and annotates, rather than
+      # letting `continue-on-error` swallow it. That flag does not merely stop a
+      # failure blocking the job — it rewrites the step's reported conclusion to
+      # `success`, so a denied apply reads green in the run summary, in
+      # `gh run view --json jobs` and in the badge. Measured live on
+      # productsweet-sandbox-web: `cloudformation:DescribeStacks` AccessDenied,
+      # step conclusion `success`.
+      #
+      # Probe run 30436224695 measured both halves of the remedy. A bare failing
+      # `continue-on-error` step does leave ONE annotation — but an anonymous one
+      # (`level: failure`, empty title, "Process completed with exit code 1",
+      # `path: .github`), indistinguishable from any other failing step. An
+      # emitted `::warning::` survives with its TITLE intact, so an operator can
+      # sweep every tenant for this exact condition via the check-runs
+      # annotations API. That is the difference being bought here.
+      - name: Apply monitoring stack
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if [ ! -f monitoring/monitoring.yaml ]; then
+            echo "No monitoring/monitoring.yaml in this repo — skipping monitoring stack."
+            exit 0
+          fi
+          echo "Applying monitoring stack from monitoring/monitoring.yaml"
+          if aws cloudformation deploy \
+              --template-file monitoring/monitoring.yaml \
+              --stack-name KPC-monitoring \
+              --parameter-overrides \
+                AmplifyAppId="${{ vars.PRODUCTSWEET_AMPLIFY_APP_ID }}" \
+              --no-fail-on-empty-changeset; then
+            echo "Monitoring stack KPC-monitoring is up to date."
+          else
+            echo "::warning title=Monitoring stack not applied::KPC-monitoring could not be deployed, so this site has NO build-failure alarm. The deploy itself was not blocked. Most often the deploy role predates the monitoring grant (AI6P-1720) — reconcile it with agent/scripts/bootstrap-e2e/reconcile-tenant-iam-cli.ts (AI6P-2171), then re-run this workflow."
+          fi
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Zip build artifact
+        # The runner's build output is the deploy artifact — Amplify hosts it
+        # as-is (no re-clone, no re-build). Zip the CONTENTS of the framework
+        # dist directory (AI6P-1282): `zip -r artifact.zip dist` would
+        # nest the artifact under `dist/…`, so Amplify would serve the
+        # site at `/dist/index.html` and the root URL 404s. `cd` into
+        # the dist dir first so `index.html` lands at the zip root.
+        run: |
+          set -euo pipefail
+          ( cd "dist" && zip -r "$GITHUB_WORKSPACE/artifact.zip" . )
+
+      - name: Create Amplify deployment
+        id: create
+        # Manual deployment: ask Amplify for a jobId + a presigned upload URL.
+        run: |
+          set -euo pipefail
+          response=$(aws amplify create-deployment \
+            --app-id "${{ vars.PRODUCTSWEET_AMPLIFY_APP_ID }}" \
+            --branch-name main \
+            --output json)
+          job_id=$(echo "$response" | jq -r '.jobId')
+          zip_upload_url=$(echo "$response" | jq -r '.zipUploadUrl')
+          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          echo "zip_upload_url=$zip_upload_url" >> "$GITHUB_OUTPUT"
+          echo "Created Amplify deployment $job_id"
+
+      - name: Upload artifact to Amplify
+        # Upload the zip to the presigned URL Amplify returned.
+        run: |
+          set -euo pipefail
+          curl -fsS -H 'Content-Type: application/zip' \
+            --upload-file artifact.zip \
+            "${{ steps.create.outputs.zip_upload_url }}"
+
+      - name: Start Amplify deployment
+        # Tell Amplify the upload is complete; this kicks off DEPLOY + VERIFY
+        # (no BUILD step).
+        run: |
+          set -euo pipefail
+          aws amplify start-deployment \
+            --app-id "${{ vars.PRODUCTSWEET_AMPLIFY_APP_ID }}" \
+            --branch-name main \
+            --job-id "${{ steps.create.outputs.job_id }}"
+          echo "Started Amplify deployment ${{ steps.create.outputs.job_id }}"
+
+      - name: Poll Amplify job to terminal status
+        run: |
+          set -euo pipefail
+          job_id="${{ steps.create.outputs.job_id }}"
+          for i in $(seq 1 60); do
+            status=$(aws amplify get-job \
+              --app-id "${{ vars.PRODUCTSWEET_AMPLIFY_APP_ID }}" \
+              --branch-name main \
+              --job-id "$job_id" \
+              --query 'job.summary.status' \
+              --output text)
+            echo "Amplify job $job_id status: $status (poll $i/60)"
+            case "$status" in
+              SUCCEED) exit 0 ;;
+              FAILED|CANCELLED) exit 1 ;;
+              PENDING|PROVISIONING|RUNNING) sleep 30 ;;
+              *) echo "Unknown status $status" >&2; exit 1 ;;
+            esac
+          done
+          echo "Timed out after 30 minutes" >&2
+          exit 1
+
+      # AI6P-1566: feed the AmplifyBuildFailureAlarm. When any prior deploy step
+      # failed, record ProductSweet/Deploy BuildFailure=1 so the health-signal
+      # alarm reflects the failed deploy. Best-effort — a missing PutMetricData
+      # grant must not turn a build failure into an additional workflow error.
+      #
+      # AI6P-2239: of the three best-effort steps this is the one that most needs
+      # to say so when it fails. It runs only on `failure()`, and its whole job is
+      # to make a failed deploy visible; if it is denied, the deploy fails AND the
+      # alarm that should announce that stays silent. Two failures, no signal.
+      - name: Record Amplify build-failure metric
+        if: failure()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if aws cloudwatch put-metric-data \
+              --namespace ProductSweet/Deploy \
+              --metric-name BuildFailure \
+              --value 1 \
+              --dimensions App="${{ vars.PRODUCTSWEET_AMPLIFY_APP_ID }}"; then
+            echo "Recorded ProductSweet/Deploy BuildFailure=1."
+          else
+            echo "::warning title=Build-failure metric not recorded::This deploy FAILED and ProductSweet/Deploy BuildFailure could not be published, so the build-failure alarm will not fire for it. Check the deploy role's cloudwatch:PutMetricData grant (AI6P-2239)."
+          fi

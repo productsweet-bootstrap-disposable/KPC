@@ -1,0 +1,37 @@
+# dependabot — npm + github-actions ecosystems on a weekly cadence with
+# package groups for AWS SDK, testing libraries, and the framework's own
+# packages. AI6P-249 / AI6P-278 / AI6P-101 lessons; canonical-checklist §B8.
+#
+# Templated by the AI6P-249 bootstrap; substituted placeholders:
+#   DEPENDABOT_FRAMEWORK_PACKAGES  YAML-list of framework-package globs
+#                                  (e.g. `astro`, `@astrojs/*`)
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      aws-sdk:
+        patterns:
+          - "@aws-sdk/*"
+          - "aws-sdk"
+      testing:
+        patterns:
+          - "jest"
+          - "@types/jest"
+          - "ts-jest"
+          - "vitest"
+          - "@testing-library/*"
+          - "@playwright/*"
+          - "playwright"
+      framework:
+        patterns:
+          - "astro"
+          - "@astrojs/*"
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

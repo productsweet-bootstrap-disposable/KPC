@@ -1,0 +1,31 @@
+# actionlint — lints every workflow YAML on workflow-file edits.
+#
+# AI6P-249 / AI6P-278 / AI6P-100 lessons:
+#   - Path filter scoped to `.github/workflows/**` (canonical-checklist §B6).
+#   - Uses reviewdog/action-actionlint (the canonical packaged runner for
+#     rhysd/actionlint).
+#   - SHA-pinned per AI6P-103/-104 supply-chain hardening.
+name: actionlint
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Run actionlint
+        uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d # v1.72.0
+        with:
+          reporter: github-pr-review
+          fail_on_error: "true"
