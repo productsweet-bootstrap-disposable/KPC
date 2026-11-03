@@ -1,0 +1,76 @@
+# Static-frontend health-signal alarms — AI6P-1566, narrowed by AI6P-2260.
+#
+# A minimal CloudWatch alarm set over the infra metrics that DO exist for a
+# static Amplify site. This is the ONLY monitoring stack a website tenant gets,
+# and it carries the Amplify build-failure signal. No application log groups
+# exist for a static frontend, so this is alarms over infra metrics, NOT
+# log-line metric filters.
+#
+# AI6P-2260 deleted the companion us-east-1 `monitoring-cloudfront.yaml` stack.
+# Its `AWS/CloudFront 5xxErrorRate` alarm needed a `DistributionId` dimension,
+# and for an Amplify-hosted site there is no obtainable value for it: Amplify
+# owns the distribution in an AWS service account, exposes only its DNS name
+# (never its ID), and publishes none of its `AWS/CloudFront` metrics into the
+# tenant account. The alarm could not receive data, and the empty parameter
+# wedged the stack in ROLLBACK_COMPLETE on every custom-domain tenant. The
+# Amplify-native replacement signal (`AWS/AmplifyHosting 5xxErrors`, dimension
+# `App`, which DOES publish in this region) is AI6P-2358 — not yet shipped, so
+# there is currently no edge error-rate alarm for a website tenant.
+#
+# Health-signal ONLY — none of these alarms wire an AlarmAction (no SNS / no
+# paging). Their OK/ALARM state is the signal the cross-account ingestion
+# consumer reads by the "KPC-" alarm-name prefix (matching the
+# webapp observability baseline posture).
+#
+# AI6P-2258: that consumer is LIVE, not future — the AI6P-1652 runtime-health
+# sweep (`lambdas/src/health/runtime-health-reader.ts`, `DescribeAlarms` with
+# `AlarmNamePrefix: "{repoName}-"`, cross-account, on the 5-minute health tick,
+# per-org gated by `health-triage-v1`). The prefix is a live contract, not a
+# convention held for later: an alarm named outside it is read by nothing.
+# Known limitation — the sweep reads the tenant's PRIMARY account and region
+# only, so a cross-account environment's alarms are not ingested (AI6P-2268).
+# Every alarm in this stack is in the primary account + region, so all of them
+# are ingested.
+#
+# Emitted deterministically by the bootstrap materialiser and applied by the
+# tenant deploy workflow (deploy-low.yml) via `aws cloudformation deploy`.
+# Templated placeholders: PROJECT_NAME, PROJECT_SLUG.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Product Sweet static-frontend health-signal alarms for KPC
+  (bootstrap monitoring baseline, AI6P-1566). Health-signal only — no paging.
+
+Parameters:
+  AmplifyAppId:
+    Type: String
+    Description: >-
+      The Amplify app id whose hosting metrics are alarmed. Supplied by the
+      deploy workflow from the PRODUCTSWEET_AMPLIFY_APP_ID repo variable.
+  AmplifyBranchName:
+    Type: String
+    Default: main
+    Description: The Amplify branch name (the low environment deploys `main`).
+
+Resources:
+  # Amplify deploy (build) failure signal. Fires on the ProductSweet/Deploy
+  # BuildFailure custom metric, which the tenant deploy workflow emits (value 1)
+  # when a RELEASE job does not reach SUCCEED. TreatMissingData notBreaching so a
+  # clean history reads OK rather than INSUFFICIENT_DATA.
+  AmplifyBuildFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: KPC-amplify-build-failure
+      AlarmDescription: >-
+        Amplify deploy (build) failure signal for KPC.
+      Namespace: ProductSweet/Deploy
+      MetricName: BuildFailure
+      Dimensions:
+        - Name: App
+          Value: !Ref AmplifyAppId
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
