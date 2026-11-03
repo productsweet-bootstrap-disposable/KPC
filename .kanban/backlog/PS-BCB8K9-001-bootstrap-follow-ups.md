@@ -1,25 +1,25 @@
 ---
-title: "Bootstrap Follow-ups"
-id: "PS-BCB8K9-001"
+title: Bootstrap Follow-ups
+id: PS-BCB8K9-001
 status: backlog
 template_type: implementation-task
 kind: epic
 backlog_state: refining
-created: "2026-11-03"
-updated: "2026-11-03"
+created: 2026-11-03
+updated: 2026-11-03
 priority: medium
-owner: "productsweet-bootstrap-disposable"
-source: "Product Sweet bootstrap (AI6P-249)"
+owner: productsweet-bootstrap-disposable
+source: Product Sweet bootstrap (AI6P-249)
 tags:
-  - "bootstrap"
-  - "follow-up"
+  - bootstrap
+  - follow-up
+depends_on: []
 related_files:
-  - ".agent/current-state.md"
-  - ".agent/knowledge.md"
+  - .agent/current-state.md
+  - .agent/knowledge.md
 comments: 0
 attachments: 0
 ---
-
 ## Summary
 
 Parent epic for the obvious next moves after the Product Sweet bootstrap reaches `complete`. The
@@ -109,9 +109,16 @@ to `done`.
 ## Questions
 
 ```yaml
-- question: "Are there project-specific follow-ups the bootstrap could not have known about (custom auth, third-party integrations, hosted form services)? If yes, author fresh tasks under this epic."
-  status: open
-  thread: []
+- question: Are there project-specific follow-ups the bootstrap could not have known about (custom auth, third-party integrations, hosted form services)? If yes, author fresh tasks under this epic.
+  status: answered
+  thread:
+    - role: user
+      text: |-
+        Will likely need contact form functionality whereby a user can submit an enquiry using the contact form which routes an email to a Google Workspace email address.
+
+        Additionally may need to show a map of the companies location.
+
+        Site should be optimised for SEO and able to be crawled by search engines etc.
 ```
 
 ## Documentation Update Plan
